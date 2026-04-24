@@ -5,9 +5,10 @@
 | 画面ID | 画面名 | URL | ログイン必須 |
 |--------|--------|-----|--------------|
 | SCR-01 | ログイン（登録含む） | /login | × |
-| SCR-02 | タイムライン | /timeline | × |
-| SCR-03 | 地図表示 | /map | × |
+| SCR-02 | タイムライン | /timeline | ○ |
+| SCR-03 | 地図表示 | /map | ○ |
 | SCR-04 | マイページ | /mypage | ○ |
+| SCR-05 | 検索 | /search | ○ |
 
 補足：
 - 新規登録は独立ページを持たず、ログイン画面内のモーダルで切り替えて表示する。
@@ -31,24 +32,25 @@
 ### 入力項目（ログイン）
 | 項目 | 型 | 必須 |
 |------|----|------|
-| email | text | ○ |
+| loginId | text | ○ |
 | password | password | ○ |
 
 ### 入力項目（新規登録）
 | 項目 | 型 | 必須 |
 |------|----|------|
-| username | text | ○ |
+| userName | text | ○ |
 | email | text | ○ |
 | password | password | ○ |
+| birthDate | date | ○ |
 
 ### 処理（ログイン）
-- `POST /login`（フォーム送信）
+- `POST /api/login`（フォーム送信）
 - 認証成功時、タイムラインへリダイレクト
 - 認証失敗時、エラーメッセージ表示
 
 ### 処理（新規登録）
-- 新規登録用の登録処理を実行（詳細なエンドポイントはAPI仕様に従う）
-- 登録成功時はログインフォームへ誘導、もしくは自動ログイン（方針は実装で決定）
+- `POST /api/users` を実行
+- 登録成功後は自動ログインする
 
 ---
 
@@ -59,6 +61,9 @@
 
 ### URL
 `GET /timeline`
+
+### 認可
+ログイン必須
 
 ### 構成
 - Thymeleafでページ描画
@@ -89,15 +94,18 @@
 - 返信投稿はログイン必須
 
 ### API
-- タイムライン取得：`GET /api/posts?cursor=&limit=`
+- タイムライン取得：`GET /api/posts?lastId=&size=`
 - 投稿作成：`POST /api/posts`（multipart）
 - 投稿詳細取得：`GET /api/posts/{postId}`
-- 返信一覧取得：`GET /api/posts/{postId}/replies?cursor=&limit=`
-- 返信投稿：`POST /api/posts/{postId}/replies`
+- 返信一覧取得：`GET /api/posts/{postId}/replies`
+- 返信投稿：`POST /api/replies/{postId}/reply`
 
 ### ページネーション
-- `page.nextCursor` を使用
+- クエリパラメータは `lastId` / `size`
+- クライアントは最後に受け取った投稿 ID を次回 `lastId` に使う
+- レスポンスは配列であり、`page.nextCursor` は返さない
 - スクロール末尾到達で次ページ取得
+- 詳細な seek 条件は `docs/adr/adr_023_seek_pagination_boundary.md` に従う
 
 ---
 
@@ -109,6 +117,9 @@ Leafletを使用して地図表示する。
 
 ### URL
 `GET /map`
+
+### 認可
+ログイン必須
 
 ### 処理
 - 地図表示範囲変更時に bbox を算出
@@ -122,10 +133,10 @@ Leafletを使用して地図表示する。
 - タイムライン画面と同一仕様のモーダルを表示する（投稿詳細＋返信）
 
 ### API
-- 地図投稿取得：`GET /api/map/posts?minLat=&maxLat=&minLng=&maxLng=&limit=`
+- 地図投稿取得：`GET /api/posts/search/map?minLat=&maxLat=&minLng=&maxLng=`
 - 投稿詳細取得：`GET /api/posts/{postId}`
-- 返信一覧取得：`GET /api/posts/{postId}/replies?cursor=&limit=`
-- 返信投稿：`POST /api/posts/{postId}/replies`
+- 返信一覧取得：`GET /api/posts/{postId}/replies`
+- 返信投稿：`POST /api/replies/{postId}/reply`
 
 ---
 
@@ -147,5 +158,32 @@ Leafletを使用して地図表示する。
 
 ### API
 - 自分のユーザー情報：`GET /api/users/me`
-- 自分の投稿一覧：`GET /api/me/posts?cursor=&limit=`
-- 自分の返信一覧：`GET /api/me/replies?cursor=&limit=`
+- 自分の投稿一覧：`GET /api/users/me/posts?lastId=&size=`
+- 自分の返信一覧：`GET /api/users/me/replies?lastId=&size=`
+
+### ページネーション
+- クエリパラメータは `lastId` / `size`
+- クライアントは最後に受け取った投稿 ID / 返信 ID を次回 `lastId` に使う
+- レスポンスは配列であり、`page.nextCursor` は返さない
+- 詳細な seek 条件は `docs/adr/adr_023_seek_pagination_boundary.md` に従う
+
+---
+
+## SCR-05 検索画面
+
+### 概要
+キーワードに基づいて投稿を検索する。結果一覧は無限スクロールで追加取得する。
+
+### URL
+`GET /search`
+
+### 認可
+ログイン必須
+
+### API
+- 検索結果取得：`GET /api/posts/search?keyword=&lastId=&size=`
+
+### ページネーション
+- クエリパラメータは `lastId` / `size`
+- クライアントは最後に受け取った投稿 ID を次回 `lastId` に使う
+- レスポンスは配列であり、`page.nextCursor` は返さない

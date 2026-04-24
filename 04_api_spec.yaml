@@ -3,14 +3,16 @@ info:
   title: Footprint API
   version: 0.1.0
   description: |
-    JSON API consumed by Vue UI mounted in Thymeleaf pages.
-    Authentication is handled by Spring Security standard form login (outside this spec),
-    and the session is maintained via cookie.
+    Footprint バックエンドが提供する JSON API / multipart API の設計仕様。
+    現在の実装に合わせ、ページングは `lastId` / `size` を採用し、
+    レスポンスは配列を返す。`page.nextCursor` は返さない。
 
 servers:
-  - url: /api
+  - url: /
+    description: Same origin
 
 tags:
+  - name: Auth
   - name: Users
   - name: Posts
   - name: Replies
@@ -21,87 +23,149 @@ components:
       type: apiKey
       in: cookie
       name: JSESSIONID
-      description: Spring Security session cookie (JSESSIONID)
+      description: Spring Security session cookie
+
+  parameters:
+    LastPostId:
+      name: lastId
+      in: query
+      required: false
+      description: 前ページ最後の投稿 ID。未指定時は先頭ページ。
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    LastReplyId:
+      name: lastId
+      in: query
+      required: false
+      description: 前ページ最後の返信 ID。未指定時は先頭ページ。
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    PageSize:
+      name: size
+      in: query
+      required: false
+      description: 取得件数。1 から 20 の範囲。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+    PostIdPath:
+      name: postId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    ReplyIdPath:
+      name: parentReplyId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
 
   schemas:
-    ErrorResponse:
+    ProblemDetailError:
       type: object
-      required: [code, message]
+      description: |
+        実装は RFC 9457 の ProblemDetail を返し、`errorCode` と `details` を追加する。
       properties:
-        code:
+        type:
           type: string
-          examples: [VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INTERNAL_ERROR, INVALID_CURSOR]
-        message:
+          nullable: true
+        title:
           type: string
+          nullable: true
+        status:
+          type: integer
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
         details:
           type: array
           items:
-            type: string
+            type: object
+            additionalProperties: true
 
-    CursorToken:
-      type: string
-      description: |
-        Opaque cursor token for seek pagination.
-
-        Cursor rules:
-        - The server issues the token (page.nextCursor). Clients MUST treat it as an opaque string.
-        - Clients MUST NOT parse, modify, or generate cursor tokens.
-        - To fetch the next page, clients pass the token as the `cursor` query parameter.
-        - The server guarantees stable ordering using a composite sort key: (createdAt, id).
-        - The server MAY include signing/encryption and an expiry inside the token.
-
-        Ordering and seek semantics:
-        - Timeline (GET /posts):
-          - Sort order: createdAt DESC, id DESC
-          - Seek condition for next page:
-              (createdAt < cursorCreatedAt)
-              OR (createdAt = cursorCreatedAt AND id < cursorId)
-
-        - Replies (GET /posts/{postId}/replies):
-          - Sort order: createdAt ASC, id ASC  (thread-friendly chronological order)
-          - Seek condition for next page:
-              (createdAt > cursorCreatedAt)
-              OR (createdAt = cursorCreatedAt AND id > cursorId)
-
-        Error handling:
-        - If the cursor is invalid/expired/tampered, the server returns 400 with code=INVALID_CURSOR.
-
-    PageInfo:
+    LoginRequest:
       type: object
-      required: [hasNext]
+      required: [loginId, password]
       properties:
-        hasNext:
-          type: boolean
-        nextCursor:
-          allOf:
-            - $ref: '#/components/schemas/CursorToken'
-          nullable: true
-          description: Present only when hasNext=true.
-
-    UserMe:
-      type: object
-      required: [id, username]
-      properties:
-        id:
-          type: integer
-          format: int64
-        username:
+        loginId:
           type: string
-          maxLength: 50
+          description: ログイン ID。実装上は email を想定する。
+        password:
+          type: string
 
-    PostImage:
+    SignUpRequest:
       type: object
-      required: [id, sortOrder, url, contentType, sizeBytes]
+      required: [userName, email, password, birthDate]
+      properties:
+        userName:
+          type: string
+          minLength: 4
+          maxLength: 15
+          pattern: "^[\\x21-\\x7E]+$"
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          pattern: "^[\\x21-\\x7E]+$"
+        birthDate:
+          type: string
+          format: date
+
+    PostCreateRequest:
+      type: object
+      required: [imageFile]
+      properties:
+        imageFile:
+          type: string
+          format: binary
+        comment:
+          type: string
+          maxLength: 100
+          pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+          nullable: true
+
+    ReplyRequest:
+      type: object
+      required: [message]
+      properties:
+        parentReplyId:
+          type: string
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+          nullable: true
+        message:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+
+    ImageResponse:
+      type: object
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
         sortOrder:
           type: integer
         url:
           type: string
-          description: URL to fetch the image (implementation-dependent).
-        contentType:
+        fileExtension:
           type: string
         sizeBytes:
           type: integer
@@ -113,424 +177,155 @@ components:
           type: integer
           nullable: true
 
-    Location:
+    LocationResponse:
       type: object
-      required: [lat, lng]
       properties:
         lat:
           type: number
           format: double
+          nullable: true
         lng:
           type: number
           format: double
+          nullable: true
 
-    PostSummary:
+    PostItemResponse:
       type: object
-      required: [id, caption, createdAt, authorUsername, images, hasLocation]
       properties:
         id:
-          type: integer
-          format: int64
+          type: string
         caption:
           type: string
           nullable: true
-        createdAt:
-          type: string
-          format: date-time
-        authorUsername:
-          type: string
         images:
           type: array
           items:
-            $ref: '#/components/schemas/PostImage'
+            $ref: '#/components/schemas/ImageResponse'
         hasLocation:
           type: boolean
         location:
-          allOf:
-            - $ref: '#/components/schemas/Location'
+          $ref: '#/components/schemas/LocationResponse'
           nullable: true
-
-    PostDetail:
-      allOf:
-        - $ref: '#/components/schemas/PostSummary'
-        - type: object
-          required: [repliesCount]
-          properties:
-            repliesCount:
-              type: integer
-
-    Reply:
-      type: object
-      required: [id, postId, body, createdAt, authorUsername]
-      properties:
-        id:
-          type: integer
-          format: int64
-        postId:
-          type: integer
-          format: int64
-        parentReplyId:
-          type: integer
-          format: int64
-          nullable: true
-        body:
-          type: string
         createdAt:
           type: string
           format: date-time
-        authorUsername:
+
+    ReplyItemResponse:
+      type: object
+      properties:
+        id:
           type: string
+        postId:
+          type: string
+        parentReplyId:
+          type: string
+          nullable: true
+        message:
+          type: string
+        childCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
 
-    CursorPageOfPosts:
+    UserProfileItemResponse:
       type: object
-      required: [items, page]
       properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/PostSummary'
-        page:
-          $ref: '#/components/schemas/PageInfo'
-
-    CursorPageOfReplies:
-      type: object
-      required: [items, page]
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Reply'
-        page:
-          $ref: '#/components/schemas/PageInfo'
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        postCount:
+          type: integer
+        replyCount:
+          type: integer
 
 paths:
-  /users/me:
-    get:
-      tags: [Users]
-      summary: Get current logged-in user
-      operationId: getMe
-      security:
-        - SessionCookie: []
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserMe'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    /users/me/posts:
-      get:
-        tags: [ Posts ]
-        summary: List my posts (seek pagination with opaque cursor)
-        operationId: listMyPosts
-        security:
-          - SessionCookie: [ ]
-        parameters:
-          - name: cursor
-            in: query
-            required: false
-            schema:
-              $ref: '#/components/schemas/CursorToken'
-            description: Opaque cursor token returned as page.nextCursor from the previous response.
-          - name: limit
-            in: query
-            required: false
-            schema:
-              type: integer
-              minimum: 1
-              maximum: 50
-              default: 20
-        responses:
-          '200':
-            description: OK
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/CursorPageOfPosts'
-          '400':
-            description: Invalid cursor
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/ErrorResponse'
-          '401':
-            description: Unauthorized
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/ErrorResponse'
-
-    /users/me/replies:
-      get:
-        tags: [ Replies ]
-        summary: List my replies (seek pagination with opaque cursor)
-        operationId: listMyReplies
-        security:
-          - SessionCookie: [ ]
-        parameters:
-          - name: cursor
-            in: query
-            required: false
-            schema:
-              $ref: '#/components/schemas/CursorToken'
-            description: Opaque cursor token returned as page.nextCursor from the previous response.
-          - name: limit
-            in: query
-            required: false
-            schema:
-              type: integer
-              minimum: 1
-              maximum: 100
-              default: 50
-        responses:
-          '200':
-            description: OK
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/CursorPageOfReplies'
-          '400':
-            description: Invalid cursor
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/ErrorResponse'
-          '401':
-            description: Unauthorized
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/ErrorResponse'
-  /posts:
-    get:
-      tags: [Posts]
-      summary: List posts (timeline, newest first; seek pagination with opaque cursor)
-      operationId: listPosts
-      parameters:
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/CursorToken'
-          description: |
-            Opaque cursor token returned as page.nextCursor from the previous response.
-            If omitted, returns the first page (newest).
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CursorPageOfPosts'
-        '400':
-          description: Invalid cursor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+  /api/login:
     post:
-      tags: [Posts]
-      summary: Create a new post with image (multipart)
-      operationId: createPost
-      security:
-        - SessionCookie: []
+      tags: [Auth]
+      summary: Login
+      description: |
+        Spring Security のフォームログイン。
+        `application/x-www-form-urlencoded` で `loginId` と `password` を送る。
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/x-www-form-urlencoded:
             schema:
-              type: object
-              required: [image]
-              properties:
-                image:
-                  type: string
-                  format: binary
-                  description: JPEG/PNG (<= 5MB)
-                caption:
-                  type: string
-                  nullable: true
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        '201':
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PostDetail'
-        '400':
-          description: Validation error / upload restriction
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+        '200':
+          description: Logged in
         '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          description: Authentication failed
 
-  /posts/{postId}:
-    get:
-      tags: [Posts]
-      summary: Get post detail
-      operationId: getPost
-      parameters:
-        - name: postId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PostDetail'
-        '404':
-          description: Not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /posts/{postId}/replies:
-    get:
-      tags: [Replies]
-      summary: List replies for a post (seek pagination with opaque cursor)
-      operationId: listReplies
-      parameters:
-        - name: postId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            $ref: '#/components/schemas/CursorToken'
-          description: |
-            Opaque cursor token returned as page.nextCursor from the previous response.
-            If omitted, returns the first page.
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 50
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CursorPageOfReplies'
-        '400':
-          description: Invalid cursor
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
+  /api/logout:
     post:
-      tags: [Replies]
-      summary: Create a reply to a post (or to another reply)
-      operationId: createReply
+      tags: [Auth]
+      summary: Logout
       security:
         - SessionCookie: []
-      parameters:
-        - name: postId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          description: Unauthorized
+
+  /api/users:
+    post:
+      tags: [Users]
+      summary: Sign up
+      description: 登録成功後はそのままログイン状態へ移行する。
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [body]
-              properties:
-                body:
-                  type: string
-                  minLength: 1
-                  maxLength: 2000
-                parentReplyId:
-                  type: integer
-                  format: int64
-                  nullable: true
+              $ref: '#/components/schemas/SignUpRequest'
       responses:
         '201':
           description: Created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Reply'
         '400':
-          description: Validation error
+          description: Validation failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: '#/components/schemas/ProblemDetailError'
+        '409':
+          description: Email already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileItemResponse'
         '401':
           description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
-  /map/posts:
+  /api/users/me/posts:
     get:
-      tags: [Posts]
-      summary: List posts within bbox (map view)
-      operationId: listPostsByBbox
+      tags: [Users]
+      summary: List my posts
+      security:
+        - SessionCookie: []
       parameters:
-        - name: minLat
-          in: query
-          required: true
-          schema: { type: number, format: double }
-        - name: maxLat
-          in: query
-          required: true
-          schema: { type: number, format: double }
-        - name: minLng
-          in: query
-          required: true
-          schema: { type: number, format: double }
-        - name: maxLng
-          in: query
-          required: true
-          schema: { type: number, format: double }
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 500
-            default: 200
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
       responses:
         '200':
           description: OK
@@ -539,4 +334,281 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/PostSummary'
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+
+  /api/users/me/replies:
+    get:
+      tags: [Users]
+      summary: List my replies
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/LastReplyId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+
+  /api/posts:
+    get:
+      tags: [Posts]
+      summary: List recent posts
+      description: |
+        無限スクロール用の一覧取得。
+        `lastId` は前ページ最後の投稿 ID を渡す。
+      parameters:
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+    post:
+      tags: [Posts]
+      summary: Create post
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostCreateRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+
+  /api/posts/search:
+    get:
+      tags: [Posts]
+      summary: Search posts by keyword
+      parameters:
+        - name: keyword
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/posts/search/map:
+    get:
+      tags: [Posts]
+      summary: Search posts by bounding box
+      parameters:
+        - name: minLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90.0
+            maximum: 90.0
+        - name: maxLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90.0
+            maximum: 90.0
+        - name: minLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180.0
+            maximum: 180.0
+        - name: maxLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180.0
+            maximum: 180.0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/posts/{postId}:
+    get:
+      tags: [Posts]
+      summary: Get post detail
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/posts/{postId}/replies:
+    get:
+      tags: [Replies]
+      summary: List top-level replies of a post
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '404':
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/replies/{parentReplyId}:
+    get:
+      tags: [Replies]
+      summary: List nested replies of a reply
+      parameters:
+        - $ref: '#/components/parameters/ReplyIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '404':
+          description: Reply not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/replies/{postId}/reply:
+    post:
+      tags: [Replies]
+      summary: Create reply
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation failed or parent/post mismatch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '404':
+          description: Post or parent reply not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'

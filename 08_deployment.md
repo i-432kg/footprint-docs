@@ -1,40 +1,80 @@
 # Deployment Design
 
 ## 1. 方針
-- 初期は Railway を用いて素早く公開し、運用コストを抑える
-- 画像は初期段階から Amazon S3 に保存し、環境移行時のデータ移行コストを最小化する
+- local / stg / prod で構成差分を持ちつつ、Docker build により実行環境差分を縮小する
+- stg デプロイは GitHub Actions から Railway を用いて行う
+- frontend は別リポジトリで管理し、Docker build 時に成果物を backend へ取り込む
+- 画像は stg / prod で Amazon S3 に保存し、将来の AWS 移行コストを抑える
 - 利用状況・コスト・運用要件に応じて AWS（ECS or EC2 + RDS + S3）へ移行する
-- アプリは Docker イメージでデプロイし、環境差分を縮小する
 
 ---
 
-## 2. 初期構成（Railway + S3）
+## 2. 現在の構成
 
-### 2.1 構成要素
-- Hosting：Railway（Spring Boot アプリ）
-- DB：Railway Managed DB（MySQL）
-- Object Storage：Amazon S3（画像保存）
-- Domain/TLS：Railway の提供機能 or 独自ドメイン（HTTPS）
+### 2.1 local
 
-### 2.2 目的
-- 公開までのリードタイムを短縮する
-- 画像をS3に置くことで、将来AWSに移行しても画像ストレージを変更不要にする
+- Backend: `./gradlew bootRun`
+- DB: `docker compose` で起動する MySQL
+- Object Storage: local filesystem (`storage/local`)
+- Frontend: Vite dev server を参照
 
-### 2.3 設定（環境変数）
-- DB
-    - DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD
-- Session / Security
-    - （必要に応じて）COOKIE_SECURE / SAME_SITE など
-- S3
-    - S3_BUCKET
-    - S3_REGION
-    - AWS_ACCESS_KEY_ID
-    - AWS_SECRET_ACCESS_KEY
-    - S3_BASE_URL（署名URL or 配信URL方針に応じて）
-- App
-    - SPRING_PROFILES_ACTIVE（railway等）
+### 2.2 stg
 
-### 2.4 注意点
+- Hosting: Railway
+- Deploy Trigger: GitHub Actions (`develop` push / repository_dispatch / manual)
+- Build Input:
+  - backend repository
+  - frontend repository
+- Frontend Integration:
+  - workflow で frontend repository を checkout
+  - Docker build 内で frontend を build
+  - build 成果物を Spring Boot の `static` 配下へ取り込む
+- Object Storage: S3
+
+### 2.3 prod
+
+- アプリ設定上は stg と同様に S3 前提
+- 実運用構成は stg と同系統を想定する
+- 詳細な本番デプロイ方式は今後確定する
+
+### 2.4 現在の STG デプロイフロー
+
+1. backend repository を checkout
+2. repository variables / secrets を検証
+3. frontend repository を指定 ref で checkout
+4. Railway CLI をインストール
+5. `railway up --service ...` を実行
+
+関連実装:
+
+- `.github/workflows/deploy-stg.yml`
+- `Dockerfile`
+
+### 2.5 設定値の責務
+
+実装上は、設定値を次の 3 系統で扱う。
+
+- local:
+  - `.env`
+  - `compose.yaml`
+  - `application-local.yml`
+- CI/CD:
+  - GitHub Actions Variables / Secrets
+- デプロイ先:
+  - Railway のサービス変数
+
+主な設定値例:
+
+- DB 接続情報
+- frontend repository / ref
+- Railway service 名
+- S3 接続情報
+- Spring profile
+
+### 2.6 注意点
+- frontend repository 取得に失敗すると STG デプロイ全体が失敗する
+- backend と frontend は単一成果物へ同梱されるため、ロールバックも原則セットで考える
+- Flyway migration はアプリ起動時に走る前提であり、migration 失敗は起動失敗に直結する
 - サーバセッション（JSESSIONID）は単一インスタンス運用では問題ない
 - 将来スケールアウトする場合はセッション共有（Redis等）を検討する
 
@@ -70,17 +110,21 @@
 ## 4. 画像保存（S3）設計
 
 ### 4.1 基本方針
-- 画像はアプリサーバのローカルに保存しない
-- 保存先は S3 に統一し、Railway/AWSで共通とする
+- local はローカルファイルシステムへ保存する
+- stg / prod は S3 へ保存する
+- 将来的なクラウド移行を見据え、stg / prod は S3 前提で統一する
 
 ### 4.2 オブジェクトキー例
 - posts/{postId}/{uuid}.jpg
 
 ### 4.3 画像配信方式
-- MVP：S3の署名付きURL（期限付き）で配信（private bucket前提）
-- 将来：CloudFront + OAC/OAI 等で配信（必要に応じて）
+- 現在: S3 の presigned URL（期限付き）で配信（private bucket 前提）
+- 将来: CloudFront + private content で配信
 
-※ どちらでも、アプリ側の「画像URL返却仕様」を揃えておく
+補足:
+
+- presigned URL は CloudFront 対応までの暫定策とする
+- 詳細方針は `docs/adr/adr_021_auth_required_and_temporary_presigned_image_url.md` に従う
 
 ---
 
@@ -110,12 +154,20 @@
 ---
 
 ## 7. CI/CD（推奨）
-- Docker image をビルドし、環境ごとにデプロイする
-- 秘密情報はリポジトリに含めず、環境変数/Secretで管理する
+- STG は GitHub Actions から Railway へデプロイする
+- Docker build の中で frontend を build し、backend へ取り込む
+- 秘密情報はリポジトリに含めず、GitHub Secrets / Railway 変数等で管理する
+- `develop` ブランチ push を基本トリガーとする
+
+## 8. 監視とヘルスチェック
+
+- `/actuator/health` をヘルスチェック用に公開する
+- ログはデプロイ先のログ基盤で収集する
+- 将来的な構造化ログ / 可観測性方針は `06_log_design.md` と整合を取る
 
 ---
 
-## 8. 移行タイミングの判断基準（例）
+## 9. 移行タイミングの判断基準（例）
 - Railwayの月額費用がAWS構成の月額に近づいた
 - DB/バックアップ/監視を強化したくなった
 - スケールアウトや可用性が必要になった

@@ -12,7 +12,7 @@
 - 画面描画は Thymeleaf + Vue（mounted）で実施（Vue Routerなし）
 - データ操作は /api/** のJSON APIをAxiosで呼び出す
 - 認証は Spring Security セッションCookie（JSESSIONID）
-- タイムライン/一覧はシーク法（opaque cursor）
+- タイムライン/一覧はシーク法（`lastId` / `size`）
 - 地図は bbox 検索（minLat/maxLat/minLng/maxLng）
 
 ## 3. 基本方針
@@ -73,7 +73,7 @@
 
 ## 6. ログレベル基準
 - INFO：正常系の主要イベント（投稿作成成功、返信作成成功、bbox検索実行など）
-- WARN：想定内の異常（バリデーションエラー、認可エラー、cursor不正、EXIF取得不可など）
+- WARN：想定内の異常（バリデーションエラー、認可エラー、`lastId` 不正、EXIF取得不可など）
 - ERROR：想定外例外、処理継続困難、保存失敗、整合性問題
 - DEBUG：開発環境のみ（詳細デバッグ）
 
@@ -94,13 +94,13 @@
 - POST_CREATE_UPLOAD_REJECTED
 - POST_DETAIL_FETCH
 - POST_MAP_BBOX_FETCH
-- POST_CURSOR_INVALID
+- POST_LAST_ID_INVALID
 
 ### 7.3 返信
 - REPLY_LIST_FETCH
 - REPLY_CREATE_SUCCESS
 - REPLY_CREATE_VALIDATION_FAIL
-- REPLY_CURSOR_INVALID
+- REPLY_LAST_ID_INVALID
 
 ### 7.4 マイページ
 - ME_FETCH
@@ -117,29 +117,30 @@
 - app.WARN：username/email重複（UNIQUE制約）
 
 ### SCR-02 タイムライン（無限スクロール）
-- access.INFO：/api/posts（limit, cursor有無, 件数, durationMs）
-- app.WARN：POST_CURSOR_INVALID（cursorが不正/期限切れ）
+- access.INFO：/api/posts（size, lastId有無, 件数, durationMs）
+- app.WARN：POST_LAST_ID_INVALID（lastIdが不正）
 - audit.INFO：POST_CREATE_SUCCESS（postId, userId, imageSizeBytes, hasLocation）
 - app.WARN：POST_CREATE_UPLOAD_REJECTED（サイズ超過、形式不正）
 - app.WARN：EXIF位置情報なし（exifAvailable=true/false, hasLocation=false）
 - app.ERROR：画像保存失敗、DB保存失敗（traceId必須）
+- app.WARN：同一 `created_at` 境界の取りこぼし懸念がある場合はページング異常として記録する
 
 #### 投稿詳細モーダル（SCR-02内）
 - access.INFO：/api/posts/{id}
-- access.INFO：/api/posts/{id}/replies（limit, cursor, 件数）
+- access.INFO：/api/posts/{id}/replies（件数）
 - audit.INFO：REPLY_CREATE_SUCCESS（replyId, postId, parentReplyId, userId）
 - app.WARN：REPLY_CREATE_VALIDATION_FAIL
 - auth.WARN：AUTH_UNAUTHORIZED（未ログインで返信POST）
 
 ### SCR-03 地図表示（bbox）
-- access.INFO：/api/map/posts（bbox, limit, 件数, durationMs）
+- access.INFO：/api/posts/search/map（bbox, 件数, durationMs）
 - app.WARN：bboxパラメータ不正（範囲逆転、過大範囲など）
 - フロントui.INFO：bbox変更は高頻度のためサンプリング/デバウンス前提
 
 ### SCR-04 マイページ
 - access.INFO：/api/users/me
-- access.INFO：/api/me/posts（cursor, 件数, durationMs）
-- access.INFO：/api/me/replies（cursor, 件数, durationMs）
+- access.INFO：/api/users/me/posts（lastId, size, 件数, durationMs）
+- access.INFO：/api/users/me/replies（lastId, size, 件数, durationMs）
 - auth.WARN：未ログインアクセス → 401
 
 ## 9. 監視に使うログ指標（MVP）
@@ -149,7 +150,7 @@
 - 画像アップロード失敗率（UPLOAD_REJECTED / 例外）
 - EXIF位置情報取得率（hasLocation率）
 - bbox検索の件数、処理時間
-- タイムライン取得（cursorページング）の処理時間
+- タイムライン取得（`lastId` ページング）の処理時間
 - 返信作成失敗率（validation / 401 / 例外）
 
 ## 10. JSONログ例
@@ -168,7 +169,7 @@
   "durationMs": 128,
   "userId": 12,
   "username": "anon_fox",
-  "cursorPresent": true,
-  "limit": 20,
+  "lastIdPresent": true,
+  "size": 20,
   "items": 20
 }
