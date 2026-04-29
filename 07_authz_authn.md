@@ -17,11 +17,13 @@
 ### 3.1 ログイン方式
 - Spring Security 標準フォームログインを使用する
     - GET /login：ログイン画面表示（Thymeleaf）
-    - POST /api/login：認証（成功時セッション発行）
+    - POST /api/login：認証処理（成功時セッション発行）
     - POST /api/logout：ログアウト（セッション無効化）
 - ログインパラメータ名は `loginId` を使用する
 - サインアップは `POST /api/users` で受け付け、`birthDate` を必須とする
 - サインアップ成功後は自動ログインする
+- `/api/login` はフロントエンドから `application/x-www-form-urlencoded` で呼び出す
+- ログイン成功時は `200 OK` を返し、成功後の画面遷移はフロントエンドが制御する
 
 ### 3.2 セッション管理
 - 認証成功時にサーバー側でセッションを作成し、Cookie（JSESSIONID）で保持する
@@ -35,7 +37,7 @@
 
 ### 3.4 CSRF対策
 - セッションCookie運用のため CSRF 対策を有効化する
-- /api/** の更新系（POST/PUT/DELETE）では、フロント（Axios）がCSRFトークンを送付する
+- /api/** の更新系（POST/PUT/DELETE）では、フロントエンドの HTTP クライアントが CSRF トークンを送付する
 - 読み取り系（GET）はCSRF不要
 
 > 注：実装方式（CookieにCSRFトークン、metaタグに埋め込み等）はUI実装に合わせて決定する
@@ -89,6 +91,9 @@
 #### 画像配信
 - local の `/images/**` は原則認証必須とする
 - stg / prod は S3 presigned URL を暫定利用し、CloudFront 導入まで短命 URL で運用する
+- `APP_STORAGE_S3_PRESIGNED_GET_EXPIRE_MINUTES` は 1 分を採用する
+- 画像表示は URL 発行後すぐに取得する前提とし、期限切れ時は画像 URL の再取得で吸収する
+- presigned URL を知る第三者が期限内に取得できるリスクは残るため、暫定運用の前提として将来は CloudFront private content へ移行する
 
 ### 4.3 所有者制御（MVP/将来）
 MVPでは「作成」のみだが、将来の編集・削除で必要となる。

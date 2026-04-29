@@ -17,6 +17,11 @@
 - DB: `docker compose` で起動する MySQL
 - Object Storage: local filesystem (`storage/local`)
 - Frontend: Vite dev server を参照
+- Seed:
+  - `ApplicationRunner` により起動時に local seed を実行できる
+  - `app.local-seed.enabled=true` の場合のみ投入する
+  - `cleanup-only`, `cleanup-before-seed` により cleanup のみ、または投入前 cleanup を切り替える
+  - 元画像と manifest はローカルの `seed-source/` 配下を参照する
 
 ### 2.2 stg
 
@@ -30,12 +35,17 @@
   - Docker build 内で frontend を build
   - build 成果物を Spring Boot の `static` 配下へ取り込む
 - Object Storage: S3
+- Seed:
+  - `ApplicationRunner` により起動時に STG seed を実行できる
+  - `app.stg-seed.enabled=true` の場合のみ投入する
+  - `cleanup-only`, `cleanup-before-seed` により cleanup のみ、または投入前 cleanup を切り替える
+  - 元画像と manifest は S3 上の seed source bucket / manifest object key を参照する
 
 ### 2.3 prod
 
-- アプリ設定上は stg と同様に S3 前提
-- 実運用構成は stg と同系統を想定する
-- 詳細な本番デプロイ方式は今後確定する
+- 初回リリース時は Railway を利用し、stg と同系統の構成で運用する
+- アプリ設定上も stg と同様に S3 前提とする
+- 将来的に運用要件が変わった場合は AWS などへの移行を検討する
 
 ### 2.4 現在の STG デプロイフロー
 
@@ -75,8 +85,22 @@
 - frontend repository 取得に失敗すると STG デプロイ全体が失敗する
 - backend と frontend は単一成果物へ同梱されるため、ロールバックも原則セットで考える
 - Flyway migration はアプリ起動時に走る前提であり、migration 失敗は起動失敗に直結する
+- Flyway migration は local / stg / prod でアプリ起動時に自動実行する正式運用とし、本番投入前に同一 migration を stg で検証する
 - サーバセッション（JSESSIONID）は単一インスタンス運用では問題ない
 - 将来スケールアウトする場合はセッション共有（Redis等）を検討する
+
+### 2.7 Seed 実行・cleanup 運用
+
+- local / stg には fixed seed scenario を投入するための起動時 runner を持つ
+- seed は通常リクエスト処理とは別の検証用運用であり、prod では利用しない前提とする
+- local:
+  - 設定プレフィックスは `app.local-seed.*`
+  - 主な設定は `enabled`, `cleanup-only`, `cleanup-before-seed`, `test-password`, `email-prefix`, `source-root-dir`, `manifest-path`
+- stg:
+  - 設定プレフィックスは `app.stg-seed.*`
+  - 主な設定は `enabled`, `cleanup-only`, `cleanup-before-seed`, `test-password`, `email-prefix`, `source-bucket-name`, `manifest-object-key`
+- cleanup は seed が作成したユーザー / 投稿 / 返信 / 投稿画像レコードと保存画像実体を対象とする
+- seed ログは fixed seed scenario の固定ダミーデータに限って詳細出力を許容する
 
 ---
 
@@ -124,6 +148,9 @@
 補足:
 
 - presigned URL は CloudFront 対応までの暫定策とする
+- `APP_STORAGE_S3_PRESIGNED_GET_EXPIRE_MINUTES` は 1 分を採用する
+- URL は画像表示直前に払い出し、期限切れ時はアプリケーションから再取得する運用を前提とする
+- 1分運用でも URL 保有者による期限内取得は防げないため、恒久対策は CloudFront private content への移行とする
 - 詳細方針は `docs/adr/adr_021_auth_required_and_temporary_presigned_image_url.md` に従う
 
 ---

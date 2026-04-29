@@ -44,8 +44,10 @@
 | birthDate | date | ○ |
 
 ### 処理（ログイン）
-- `POST /api/login`（フォーム送信）
-- 認証成功時、タイムラインへリダイレクト
+- `POST /api/login`（フロントエンドから `application/x-www-form-urlencoded` で送信）
+- `/api/login` は Spring Security のログイン処理エンドポイントとして扱う
+- 認証成功時、サーバー側でセッションを発行し `200 OK` を返す
+- 成功後の画面遷移はフロントエンドが制御する
 - 認証失敗時、エラーメッセージ表示
 
 ### 処理（新規登録）
@@ -68,7 +70,7 @@
 ### 構成
 - Thymeleafでページ描画
 - Vueをマウント
-- Axiosで `/api/posts` を取得
+- `fetch` で `/api/posts` を取得
 
 ### UI構成
 - 投稿作成ボタン
@@ -91,13 +93,15 @@
 ### 投稿詳細表示（モーダル）
 - 投稿カード/画像クリックでモーダル表示
 - モーダル内で投稿本文・画像・返信一覧を表示
+- 返信ツリーは、まず投稿直下の返信を全件取得し、子返信は展開時に 1 階層ずつ取得する
 - 返信投稿はログイン必須
 
 ### API
 - タイムライン取得：`GET /api/posts?lastId=&size=`
 - 投稿作成：`POST /api/posts`（multipart）
 - 投稿詳細取得：`GET /api/posts/{postId}`
-- 返信一覧取得：`GET /api/posts/{postId}/replies`
+- 投稿直下の返信一覧取得：`GET /api/posts/{postId}/replies`
+- 子返信一覧取得：`GET /api/replies/{parentReplyId}`
 - 返信投稿：`POST /api/replies/{postId}/reply`
 
 ### ページネーション

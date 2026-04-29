@@ -51,7 +51,7 @@
 %% =====================
 %% API calls from Vue
 %% =====================
-    VUE -->|Axios JSON API| CTRL_API
+    VUE -->|fetch JSON API| CTRL_API
     CTRL_API --> SEC
     CTRL_API --> SVC
 

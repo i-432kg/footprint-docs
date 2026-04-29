@@ -5,7 +5,12 @@ info:
   description: |
     Footprint バックエンドが提供する JSON API / multipart API の設計仕様。
     現在の実装に合わせ、ページングは `lastId` / `size` を採用し、
-    レスポンスは配列を返す。`page.nextCursor` は返さない。
+    レスポンスは配列を返す。`page.nextCursor` は返さない。<br>
+    また、本ファイルはレビュー結果と設計意図を反映した最終使用版として扱う。
+    `docs/design/generated/openapi.yaml` は springdoc による自動生成版であり、
+    実装追随の確認や差分把握に使う下書きとして位置づける。
+    自動生成だけでは表現しきれない `POST /api/login` / `POST /api/logout`、
+    multipart の詳細、認可方針、エラー応答の補足は本ファイルへ手修正で反映する。
 
 servers:
   - url: /
@@ -92,10 +97,12 @@ components:
           type: string
           nullable: true
         details:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
+          type: object
+          nullable: true
+          description: |
+            バリデーションエラーは `errors` 配下に配列を持つ。
+            それ以外のエラーは `target`, `reason`, `rejectedValue` を基本とする object を返す。
+          additionalProperties: true
 
     LoginRequest:
       type: object
@@ -131,6 +138,9 @@ components:
 
     PostCreateRequest:
       type: object
+      description: |
+        投稿作成用 multipart リクエスト。
+        `imageFile` は 10MB 以下、JPEG / PNG / GIF / WEBP を受け付ける。
       required: [imageFile]
       properties:
         imageFile:
@@ -291,13 +301,13 @@ paths:
         '400':
           description: Validation failed
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '409':
           description: Email already used
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -338,7 +348,7 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
@@ -365,7 +375,7 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
@@ -393,12 +403,15 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
     post:
       tags: [Posts]
       summary: Create post
+      description: |
+        画像付き投稿を作成する。
+        `imageFile` は 10MB 以下とし、JPEG / PNG / GIF / WEBP を受け付ける。
       security:
         - SessionCookie: []
       requestBody:
@@ -413,7 +426,7 @@ paths:
         '400':
           description: Validation failed
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
@@ -446,7 +459,7 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -495,7 +508,7 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -515,13 +528,13 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '404':
           description: Post not found
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -529,6 +542,10 @@ paths:
     get:
       tags: [Replies]
       summary: List top-level replies of a post
+      description: |
+        投稿直下の返信を全件返す。
+        返信ツリー全体を再帰的に返す API ではなく、子返信は `GET /api/replies/{parentReplyId}` で
+        1 階層ずつ取得する。
       parameters:
         - $ref: '#/components/parameters/PostIdPath'
       responses:
@@ -543,13 +560,13 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '404':
           description: Post not found
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -557,6 +574,9 @@ paths:
     get:
       tags: [Replies]
       summary: List nested replies of a reply
+      description: |
+        指定した親返信の直下にある子返信を全件返す。
+        さらに深い階層は、展開対象の返信 ID を使って 1 階層ずつ取得する。
       parameters:
         - $ref: '#/components/parameters/ReplyIdPath'
       responses:
@@ -571,13 +591,13 @@ paths:
         '400':
           description: Invalid parameter
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '404':
           description: Reply not found
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
 
@@ -601,7 +621,7 @@ paths:
         '400':
           description: Validation failed or parent/post mismatch
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
@@ -609,6 +629,6 @@ paths:
         '404':
           description: Post or parent reply not found
           content:
-            application/json:
+            application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
