@@ -86,7 +86,8 @@ DBは MySQL 8.x を前提とする。
 制約：
 - public_id は UNIQUE
 - email は UNIQUE
-- username は UNIQUE
+
+`username` は表示用ユーザー名であり、重複を許容する。
 
 状態系カラムの扱い:
 
@@ -149,10 +150,11 @@ DBは MySQL 8.x を前提とする。
 | created_at | DATETIME | NO | 作成日時 |
 
 制約：
-- post_id → posts.public_id（外部キー）
+- post_id → posts.public_id（外部キー、ON DELETE CASCADE）
 - (post_id, sort_order) は UNIQUE
 
 MVPでは1投稿1画像とし、`sort_order = 0` で運用する。
+投稿画像レコードは投稿に完全従属するため、投稿削除時は DB の cascade により削除する。
 
 ---
 
@@ -177,6 +179,9 @@ MVPでは1投稿1画像とし、`sort_order = 0` で運用する。
 - post_id → posts.public_id
 - user_id → users.public_id
 - parent_id → replies.public_id（自己参照）
+
+返信はユーザー生成コンテンツとして扱い、投稿や親返信の削除時に DB の cascade では削除しない。
+削除ユースケースを実装する場合は、application 層で返信ツリーや `child_count` との整合性を明示的に制御する。
 
 `child_count` の扱い:
 
@@ -237,8 +242,8 @@ LIMIT :size;
 
 ### 4.2 マイページ
 
-- (posts.user_id, posts.created_at DESC)
-- (replies.user_id, replies.created_at DESC)
+- (posts.user_id, posts.created_at DESC, posts.id DESC)
+- (replies.user_id, replies.created_at DESC, replies.id DESC)
 
 マイページの無限スクロールも `lastId` / `size` を使う。
 境界条件はタイムラインと同様に、ソートキーと一致する複合条件で扱う。
@@ -270,9 +275,9 @@ Spatial Index（POINT型）への移行を検討する。
 
 ### 4.4 返信取得
 
-- (replies.post_id, created_at)
-- (replies.parent_id, created_at)
-- ORDER BY created_at DESC, id DESC を採る場合は seek 条件も複合化する
+- (replies.post_id, created_at DESC, id DESC)
+- (replies.parent_id, created_at DESC, id DESC)
+- 返信一覧は `ORDER BY created_at DESC, id DESC` により新しい順で取得する
 
 投稿詳細表示時はトップレベル返信を `post_id` で取得し、
 子返信は `parent_id` ごとに別 API で取得する。
@@ -307,17 +312,17 @@ Spatial Index（POINT型）への移行を検討する。
 
 ---
 
-## 7. ページング設計メモ
+## 6. ページング設計メモ
 
 - クライアントは最後に受け取った要素の公開 ID を `lastId` として送る
 - レスポンスは配列を返し、`page.nextCursor` は返さない
 - 次ページの有無は、返却件数が `size` 未満になること、または次回取得が空になることで判断する
-- 詳細な方針は `docs/adr/adr_023_seek_pagination_boundary.md` に従う
-- SQL 分割方針は `docs/adr/adr_025_seek_pagination_query_split.md` に従う
+- 詳細な方針は、別リポジトリの ADR `../footprint/docs/adr/adr_023_seek_pagination_boundary.md` に従う
+- SQL 分割方針は、別リポジトリの ADR `../footprint/docs/adr/adr_025_seek_pagination_query_split.md` に従う
 
 ---
 
-## 6. 今後の拡張想定
+## 7. 今後の拡張想定
 
 - いいね機能（likes テーブル追加）
 - 論理削除（deleted_at 追加）
