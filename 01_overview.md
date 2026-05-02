@@ -3,10 +3,11 @@
 ## 1. 目的
 
 本アプリケーションは、
-画像と位置情報を組み合わせた匿名型投稿サービスである。
+画像と位置情報を組み合わせた、投稿表示上の匿名性を重視する投稿サービスである。
 
 ユーザーは画像とコメントを投稿でき、 画像に含まれる位置情報をもとに投稿は地図上へ可視化される。
 他のユーザーはログイン後に投稿を閲覧し、返信できる。
+サービス上はログインユーザーを持つが、投稿表示では投稿者情報を前面に出さない。
 
 本プロジェクトでは、 
 要件定義から設計、実装、テスト、デプロイ、公開までの一連のプロセスを通して、
@@ -61,7 +62,7 @@ MVP（Minimum Viable Product）の実装を対象とする。
 本アプリケーションは、以下のようなユーザーを想定する。
 
 - 外出機会が多く、出先で写真を撮る習慣のある人物
-- ニックネームやプロフィールによって識別されるSNSに抵抗を感じる人物
+- 投稿者のニックネームやプロフィールが前面に出るSNSに抵抗を感じる人物
 - 既存の写真共有SNSとは異なる、匿名性の高い環境で投稿を行いたい人物
 
 ### 利用端末
@@ -119,8 +120,8 @@ MVP（Minimum Viable Product）の実装を対象とする。
   ※詳細は `05_screen_spec.md` へ
 
 ## 6. データの特徴（ざっくり）
-- 主要エンティティ：User / Post / Reply / Like / Image / Location など
-- 位置情報：画像 EXIF から抽出した場合のみ保持する
+- 主要エンティティ：User / Post / Reply / Image など
+- 位置情報：画像 EXIF から抽出した場合のみ、Post の緯度・経度として保持する
 - ユーザーによる位置情報の手入力は現行スコープ外とする
 - 公開識別子：API や外部参照では `public_id` / ULID を利用する
 - 画像：保存方式（開発：ローカル、stg / prod：S3）
@@ -261,18 +262,18 @@ MVP（Minimum Viable Product）の実装を対象とする。
 - HTTPクライアント：標準 `fetch`
 - 地図表示：Leaflet
 - ビルド/開発環境：Vite
-- Lint：ESLint / Oxlint
+- Lint：ESLint
 
 ### Backend
-- 言語：Java 17
+- 言語：Java 21
 - フレームワーク：Spring Boot 4
 - Web：Spring Web MVC
 - テンプレート：Thymeleaf（MPA用途）
 - 認証/認可：Spring Security（セッションCookie）
 - バリデーション：Spring Validation（Jakarta Validation）
-- 永続化：Spring Data JPA / MyBatis（併用）
-- DB（本番想定）：MySQL（mysql-connector-j）
-- 開発/検証：H2 Console
+- 永続化：MyBatis
+- DB：MySQL（mysql-connector-j）
+- DBマイグレーション：Flyway
 - 監視：Spring Boot Actuator
 - 画像メタデータ解析：metadata-extractor
 
@@ -282,10 +283,10 @@ MVP（Minimum Viable Product）の実装を対象とする。
 - MyBatis Starter Test
 
 ### 構成方針（補足）
-- 画面はMPA（Thymeleaf）とSPA（Vue）を組み合わせたハイブリッド構成とする
-- SPA領域ではVue Router / Pinia を用いて状態と画面遷移を管理する（必要箇所のみ）
+- 画面は Spring MVC / Thymeleaf によるMPAと、各画面に mount する Vue 3 multi-entry を組み合わせた構成とする
+- フロントエンドの状態管理には Pinia を用いる
 
-## 9. 環境（Local / Dev / Prod）
+## 9. 環境（Local / Stg / Prod）
 
 ### 9.1 Local（開発環境）
 
@@ -293,7 +294,7 @@ MVP（Minimum Viable Product）の実装を対象とする。
 
 - Frontend：Vite 開発サーバー（ポート 5173）
 - Backend：Spring Boot アプリケーション（ポート 8080）
-- DB：H2 DB（開発用）
+- DB：Docker Compose で起動する MySQL 8.4
 - 画像保存：ローカルファイルシステム
 
 フロントエンドとバックエンドは別プロセスで起動し、API通信は localhost 経由で行う。
@@ -301,12 +302,13 @@ MVP（Minimum Viable Product）の実装を対象とする。
 
 ---
 
-### 9.2 Dev（検証環境）
+### 9.2 Stg（検証環境）
 
-Dev環境は本番構成に近い形で動作検証を行う環境とする。
+Stg環境は本番構成に近い形で動作検証を行う環境とする。
 
 - ビルド済みFrontendをBackendに統合、または静的配信環境へ配置
-- DBは本番相当のエンジンを使用
+- DBはMySQLを使用
+- 画像保存はS3を使用
 - ログレベルはINFO以上とする
 
 具体的な構成はデプロイ方式決定後に確定する。
@@ -331,6 +333,6 @@ Dev環境は本番構成に近い形で動作検証を行う環境とする。
 - API仕様：`04_api_spec.yaml`
 - DB設計：`03_database.md`
 - ログ設計：`06_log_design.md`
-- 認証・認可：`07_security.md`
-- デプロイ：`08_deploy.md`
-- 設計判断ログ（ADR）：`/docs/adr/`
+- 認証・認可：`07_authz_authn.md`
+- デプロイ：`08_deployment.md`
+- 設計判断ログ（ADR）：バックエンドリポジトリ `../footprint/docs/adr/`
