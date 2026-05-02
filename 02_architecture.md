@@ -95,11 +95,16 @@ flowchart TB
         PORT["Ports<br/>Repository / Storage / ID"]
     end
 
-    D["Domain Layer<br/>Models / Value Objects / Domain Services"]
+    subgraph DOMAIN["Domain Layer"]
+        DS["Domain Services"]
+        MODEL["Models / Value Objects"]
+    end
+
     EXT[("External Resources<br/>MySQL / Local FS / S3")]
 
     P --> APP
-    APP --> D
+    APP --> DOMAIN
+    DS --> MODEL
     I -. implements .-> PORT
     I --> EXT
 ```
@@ -107,6 +112,7 @@ flowchart TB
 ### 内部構成補足
 
 - Domain は外側の層に依存しない。
+- Domain Service は複数のモデルや値オブジェクトにまたがるドメイン判断を表現し、Models / Value Objects に依存する。
 - Application はユースケースの流れを制御し、Domain と port に依存する。
 - Command 系はドメインモデル、値オブジェクト、ドメインサービスを通して状態変更を行う。
 - Query 系は参照用途の Query Service / Mapper で読み取りを行い、画面/API 用の参照モデルへ変換する。
