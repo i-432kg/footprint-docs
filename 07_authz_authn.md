@@ -59,10 +59,13 @@
     - /favicon.ico
     - /favicon.svg
     - /actuator/health
-- 開発環境のみ
-    - /swagger-ui/**
-    - /v3/api-docs/**
-    - /v3/api-docs.yaml
+- OpenAPI / Swagger UI
+    - local / dev は未認証で参照可
+        - /swagger-ui/**
+        - /v3/api-docs/**
+        - /v3/api-docs.yaml
+    - stg は有効化するが、認証必須とする
+    - prod は無効化する
 - API（JSON）
     - POST /api/login
     - POST /api/users
@@ -129,7 +132,7 @@ MVPでは「作成」のみだが、将来の編集・削除で必要となる�
 
 - `type` は将来的に安定 URI で運用する
 - `Content-Type` は `application/problem+json` を基本とする
-- 詳細方針は `docs/adr/adr_024_problem_detail_error_response_policy.md` に従う
+- 詳細方針は、別リポジトリ（バックエンド）の `../footprint/docs/adr/adr_024_problem_detail_error_response_policy.md` に従う
 
 ## 6. ログ方針（関連）
 - ログイン成功/失敗は auth ログとして出力する
