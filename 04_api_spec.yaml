@@ -4,13 +4,10 @@ info:
   version: 0.1.0
   description: |
     Footprint バックエンドが提供する JSON API / multipart API の設計仕様。
-    現在の実装に合わせ、ページングは `lastId` / `size` を採用し、
-    レスポンスは配列を返す。`page.nextCursor` は返さない。<br>
+    
     また、本ファイルはレビュー結果と設計意図を反映した最終使用版として扱う。
     `docs/design/generated/openapi.yaml` は springdoc による自動生成版であり、
     実装追随の確認や差分把握に使う下書きとして位置づける。
-    自動生成だけでは表現しきれない `POST /api/login` / `POST /api/logout`、
-    multipart の詳細、認可方針、エラー応答の補足は本ファイルへ手修正で反映する。
 
 servers:
   - url: /
@@ -135,6 +132,7 @@ components:
         birthDate:
           type: string
           format: date
+          description: 未来日は不可。過去日または当日を指定する。
 
     PostCreateRequest:
       type: object
@@ -215,7 +213,6 @@ components:
           type: boolean
         location:
           $ref: '#/components/schemas/LocationResponse'
-          nullable: true
         createdAt:
           type: string
           format: date-time
@@ -283,6 +280,8 @@ paths:
           description: Logged out
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/users:
     post:
@@ -326,6 +325,8 @@ paths:
                 $ref: '#/components/schemas/UserProfileItemResponse'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/users/me/posts:
     get:
@@ -353,6 +354,8 @@ paths:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/users/me/replies:
     get:
@@ -380,6 +383,8 @@ paths:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/posts:
     get:
@@ -388,6 +393,8 @@ paths:
       description: |
         無限スクロール用の一覧取得。
         `lastId` は前ページ最後の投稿 ID を渡す。
+      security:
+        - SessionCookie: []
       parameters:
         - $ref: '#/components/parameters/LastPostId'
         - $ref: '#/components/parameters/PageSize'
@@ -406,6 +413,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
     post:
       tags: [Posts]
       summary: Create post
@@ -431,11 +442,15 @@ paths:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/posts/search:
     get:
       tags: [Posts]
       summary: Search posts by keyword
+      security:
+        - SessionCookie: []
       parameters:
         - name: keyword
           in: query
@@ -462,11 +477,20 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/posts/search/map:
     get:
       tags: [Posts]
       summary: Search posts by bounding box
+      description: |
+        指定した地理範囲内の投稿を検索する。
+        `minLat <= maxLat`、`minLng <= maxLng` を満たす必要がある。
+      security:
+        - SessionCookie: []
       parameters:
         - name: minLat
           in: query
@@ -511,11 +535,17 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
 
   /api/posts/{postId}:
     get:
       tags: [Posts]
       summary: Get post detail
+      security:
+        - SessionCookie: []
       parameters:
         - $ref: '#/components/parameters/PostIdPath'
       responses:
@@ -531,6 +561,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: Post not found
           content:
@@ -546,6 +580,8 @@ paths:
         投稿直下の返信を全件返す。
         返信ツリー全体を再帰的に返す API ではなく、子返信は `GET /api/replies/{parentReplyId}` で
         1 階層ずつ取得する。
+      security:
+        - SessionCookie: []
       parameters:
         - $ref: '#/components/parameters/PostIdPath'
       responses:
@@ -563,6 +599,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: Post not found
           content:
@@ -577,6 +617,8 @@ paths:
       description: |
         指定した親返信の直下にある子返信を全件返す。
         さらに深い階層は、展開対象の返信 ID を使って 1 階層ずつ取得する。
+      security:
+        - SessionCookie: []
       parameters:
         - $ref: '#/components/parameters/ReplyIdPath'
       responses:
@@ -594,6 +636,10 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: Reply not found
           content:
@@ -626,6 +672,8 @@ paths:
                 $ref: '#/components/schemas/ProblemDetailError'
         '401':
           description: Unauthorized
+        '403':
+          description: Forbidden
         '404':
           description: Post or parent reply not found
           content:
