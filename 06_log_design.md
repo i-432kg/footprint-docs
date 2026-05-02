@@ -37,6 +37,41 @@
 - errorCode（アプリ定義コード）
 - client（必要に応じて：ua、ipなど）
 
+#### サーバログの出力方式
+
+| 環境 | 出力先 | 形式 | 補足 |
+| --- | --- | --- | --- |
+| local | console | text | ローカル開発時の可読性を優先する。 |
+| local + `local-logfile` profile | file | JSON（logstash） | ローカルで構造化ログをファイル確認したい場合のみ利用する。 |
+| stg | console | JSON（logstash） | コンテナ/実行基盤の標準出力から収集する前提。 |
+| prod | console | JSON（logstash） | コンテナ/実行基盤の標準出力から収集し、ログ基盤で保管・検索する前提。 |
+
+#### フロントログの出力方式
+
+| 環境 | 出力先 | 形式 | 補足 |
+| --- | --- | --- | --- |
+| local | browser console | JSON文字列 | 開発時の補助ログとして利用する。 |
+| stg | browser console | JSON文字列 | 動作確認・障害再現の補助として利用する。 |
+| prod | なし | - | 現時点ではフロントログを収集しない。 |
+
+#### 今後対応する改善策：prod フロントログ収集
+
+prod では、ブラウザ console へ出力している local/stg 向け補助ログを、サーバのフロントログ受信APIへ送信し、サーバ側で `frontend` 系 logger から構造化ログとして出力する改善を検討する。
+
+この改善は補助ログの収集を目的とする。
+監査・障害解析の主記録はサーバログとし、フロントログは UI 操作、画面上の API 失敗、ブラウザ環境依存の事象を補完する目的で利用する。
+
+prod フロントログ収集を実装する場合の原則:
+
+- パスワード、セッションID、CSRFトークン、画像バイナリ、フォーム入力値の全文は送信しない。
+- 検索語、投稿本文、返信本文などユーザー入力は原則送信しない。必要な場合は長さ、入力有無、分類コードに丸める。
+- `traceId` は API レスポンスから取得できた場合のみ付与する。
+- `event`, `level`, `path`, `durationMs`, `status`, `client.ua`, `client.url` など、調査に必要な最小項目に絞る。
+- 送信失敗時にリトライし続けない。ログ送信失敗はユーザー操作を阻害しない。
+- 高頻度イベントはサンプリング、集約、または送信対象外にする。
+- ログ受信API自体のアクセスログとフロントログ本文が重複しすぎないよう、サーバ側で専用カテゴリへ分離する。
+- Bot や攻撃によるログ増幅を避けるため、サーバ側でサイズ制限、件数制限、認証/CSRF、レート制限を行う。
+
 ### 3.3 個人情報・機密情報の取り扱い
 
 #### 絶対に出力しない
@@ -72,6 +107,15 @@
 - auth：認証/認可（ログイン成功/失敗、401/403、CSRFなど）
 - app：業務処理（投稿作成、返信作成、EXIF解析、bbox検索など）
 - audit：重要操作（投稿作成、返信作成）
+
+実装上の logger 名:
+
+| 論理カテゴリ | logger 名 |
+| --- | --- |
+| access | `footprint.access` |
+| auth | `footprint.auth` |
+| app | `footprint.app` |
+| audit | `footprint.audit` |
 
 ### 5.1.1 サーバログの責務分担
 ログは「どこでも出してよい」とは扱わず、カテゴリごとに出力責務を固定する。
@@ -160,7 +204,7 @@ read 系成功イベントの扱い:
 - auth.WARN：AUTH_LOGIN_FAILURE（理由は抽象化：INVALID_CREDENTIALS等）
 - app.INFO：登録成功（userId, username）
 - app.WARN：登録バリデーション失敗（フィールド名/コード）
-- app.WARN：username/email重複（UNIQUE制約）
+- app.WARN：email重複
 
 ### SCR-02 タイムライン（無限スクロール）
 - access.INFO：/api/posts（size, lastId有無, 件数, durationMs）
@@ -179,9 +223,10 @@ read 系成功イベントの扱い:
 - auth.WARN：AUTH_UNAUTHORIZED（未ログインで返信POST）
 
 ### SCR-03 地図表示（bbox）
-- access.INFO：/api/posts/search/map（bbox, 件数, durationMs）
+- access.INFO：/api/posts/search/map（POST_MAP_BBOX_FETCH、bbox, 件数, durationMs）
 - app.WARN：bboxパラメータ不正（範囲逆転、過大範囲など）
-- フロントui.INFO：bbox変更は高頻度のためサンプリング/デバウンス前提
+- フロントui.INFO：POST_MAP_MOVE（地図の moveend 時に出力する補助ログ）
+- フロントapi.INFO：POST_MAP_BBOX_FETCH（「このエリアで再検索」ボタン押下後の地図検索API成功ログ）
 
 ### SCR-04 マイページ
 - access.INFO：/api/users/me
@@ -206,7 +251,7 @@ read 系成功イベントの扱い:
 {
   "timestamp": "2026-02-22T12:34:56.789+09:00",
   "level": "INFO",
-  "logger": "access",
+  "logger": "footprint.access",
   "event": "POST_TIMELINE_FETCH",
   "traceId": "8c3e0f5a7c4b4c1a",
   "method": "GET",
