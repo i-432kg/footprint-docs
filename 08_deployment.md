@@ -33,6 +33,8 @@
 - Frontend Integration:
   - workflow で frontend repository を checkout
   - Docker build 内で frontend を build
+  - STG では Railway のサービス変数で `FRONTEND_BUILD_SCRIPT=build:stg` を指定する
+  - `build:stg` はフロント操作ログを browser console に出力するための staging mode build とする
   - build 成果物を Spring Boot の `static` 配下へ取り込む
 - Object Storage: S3
 - Seed:
@@ -77,6 +79,7 @@
 
 - DB 接続情報
 - frontend repository / ref
+- frontend build script（STG は `FRONTEND_BUILD_SCRIPT=build:stg`、prod は未指定または `build`）
 - Railway service 名
 - S3 接続情報
 - Spring profile
@@ -151,7 +154,7 @@
 - `APP_STORAGE_S3_PRESIGNED_GET_EXPIRE_MINUTES` は 1 分を採用する
 - URL は画像表示直前に払い出し、期限切れ時はアプリケーションから再取得する運用を前提とする
 - 1分運用でも URL 保有者による期限内取得は防げないため、恒久対策は CloudFront private content への移行とする
-- 詳細方針は `docs/adr/adr_021_auth_required_and_temporary_presigned_image_url.md` に従う
+- 詳細方針はバックエンドリポジトリの ADR `../footprint/docs/adr/adr_021_auth_required_and_temporary_presigned_image_url.md` に従う
 
 ---
 
@@ -182,6 +185,7 @@
 
 ## 7. CI/CD（推奨）
 - STG は GitHub Actions から Railway へデプロイする
+- STG deploy workflow は deploy 前に quality-check job を実行し、backend test / frontend lint / frontend STG build が成功した場合のみ deploy job を実行する
 - Docker build の中で frontend を build し、backend へ取り込む
 - 秘密情報はリポジトリに含めず、GitHub Secrets / Railway 変数等で管理する
 - `develop` ブランチ push を基本トリガーとする
