@@ -4,8 +4,8 @@
 
 - 対象設計書: `01_overview.md`
 - 対象実装:
-  - バックエンド: `/Users/432kg/IdeaProjects/footprint`
-  - フロントエンド: `/Users/432kg/IdeaProjects/footprint-front`
+  - バックエンド: `../footprint`
+  - フロントエンド: `../footprint-front`
 - 確認日: 2026-05-02
 - 目的: `01_overview.md` の現行記載と実装を突き合わせ、概要書更新時に修正すべき差分を洗い出す
 
@@ -47,7 +47,7 @@
 #### 実装
 
 - Gradle toolchain は Java 21
-  - `/Users/432kg/IdeaProjects/footprint/build.gradle.kts:11-14`
+  - `../footprint/build.gradle.kts:11-14`
 
 #### 差分
 
@@ -68,7 +68,7 @@ Backend の言語を `Java 21` に更新する。
 
 - 依存関係は MyBatis Starter、Flyway、MySQL connector
 - JPA starter や Spring Data JPA 依存は存在しない
-  - `/Users/432kg/IdeaProjects/footprint/build.gradle.kts:55-68`
+  - `../footprint/build.gradle.kts:55-68`
 
 #### 差分
 
@@ -90,11 +90,11 @@ Backend の言語を `Java 21` に更新する。
 #### 実装
 
 - `compose.yaml` で MySQL 8.4 を起動する
-  - `/Users/432kg/IdeaProjects/footprint/compose.yaml:2-11`
+  - `../footprint/compose.yaml:2-11`
 - local profile は `.env` の `SPRING_DATASOURCE_URL` を参照する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-local.yml:4-7`
+  - `../footprint/src/main/resources/application-local.yml:4-7`
 - `.env.example` の local URL は `jdbc:mysql://localhost:3306/footprint_local`
-  - `/Users/432kg/IdeaProjects/footprint/.env.example:7-10`
+  - `../footprint/.env.example:7-10`
 
 #### 差分
 
@@ -116,11 +116,11 @@ Local DB を `Docker Compose で起動する MySQL 8.4` に更新し、H2 Consol
 #### 実装
 
 - 設定ファイルは `application-local.yml`, `application-stg.yml`, `application-prod.yml`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-local.yml`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-stg.yml`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-prod.yml`
+  - `../footprint/src/main/resources/application-local.yml`
+  - `../footprint/src/main/resources/application-stg.yml`
+  - `../footprint/src/main/resources/application-prod.yml`
 - stg は MySQL、S3、structured logging、OpenAPI 有効の構成
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-stg.yml:1-60`
+  - `../footprint/src/main/resources/application-stg.yml:1-60`
 
 #### 差分
 
@@ -141,8 +141,8 @@ Local DB を `Docker Compose で起動する MySQL 8.4` に更新し、H2 Consol
 
 - npm scripts は `eslint . --cache` と `eslint . --fix --cache`
 - `oxlint` 依存や script は存在しない
-  - `/Users/432kg/IdeaProjects/footprint-front/package.json:14-15`
-  - `/Users/432kg/IdeaProjects/footprint-front/package.json:25-36`
+  - `../footprint-front/package.json:14-15`
+  - `../footprint-front/package.json:25-36`
 
 #### 差分
 
@@ -162,11 +162,11 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - `vue-router` 依存は存在しない
-  - `/Users/432kg/IdeaProjects/footprint-front/package.json:17-24`
+  - `../footprint-front/package.json:17-24`
 - Vite の multi entry として login / map / mypage / search / timeline を定義している
-  - `/Users/432kg/IdeaProjects/footprint-front/vite.config.js:37-46`
+  - `../footprint-front/vite.config.js:37-46`
 - 画面遷移は Spring MVC のテンプレート返却と通常リンクで行う
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/web/RootController.java:38-91`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/web/RootController.java:38-91`
 
 #### 差分
 
@@ -186,7 +186,7 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - DB テーブルは `users`, `posts`, `post_images`, `replies`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/db/migration/V1__init.sql:10-107`
+  - `../footprint/src/main/resources/db/migration/V1__init.sql:10-107`
 - Out of scope にも「いいね機能」が含まれている
   - `01_overview.md:50`
 
@@ -208,14 +208,14 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - session cookie は local で `secure: false`, `http-only: true`, `same-site: lax`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-local.yml:15-21`
+  - `../footprint/src/main/resources/application-local.yml:15-21`
 - session cookie は stg/prod で `secure: true`, `http-only: true`, `same-site: lax`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-stg.yml:20-26`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/application-prod.yml:16-22`
+  - `../footprint/src/main/resources/application-stg.yml:20-26`
+  - `../footprint/src/main/resources/application-prod.yml:16-22`
 - CSRF cookie `XSRF-TOKEN` は SPA/JS から読むため `CookieCsrfTokenRepository.withHttpOnlyFalse()` を利用する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/config/SecurityConfig.java:75-83`
+  - `../footprint/src/main/java/jp/i432kg/footprint/config/SecurityConfig.java:75-83`
 - CSRF cookie は SameSite=Lax、secure は local/dev 判定で切り替える
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/config/SecurityConfig.java:169-172`
+  - `../footprint/src/main/java/jp/i432kg/footprint/config/SecurityConfig.java:169-172`
 
 #### 差分
 
@@ -235,12 +235,12 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - サーバー側の許可拡張子は `jpg`, `jpeg`, `png`, `gif`, `webp`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/domain/value/FileExtension.java:38-43`
+  - `../footprint/src/main/java/jp/i432kg/footprint/domain/value/FileExtension.java:38-43`
 - サーバー側は `FileTypeDetector` で JPEG / PNG / GIF / WebP を判定する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/infrastructure/storage/repository/LocalImageRepositoryImpl.java:150-159`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/infrastructure/storage/repository/S3ImageRepositoryImpl.java:178-184`
+  - `../footprint/src/main/java/jp/i432kg/footprint/infrastructure/storage/repository/LocalImageRepositoryImpl.java:150-159`
+  - `../footprint/src/main/java/jp/i432kg/footprint/infrastructure/storage/repository/S3ImageRepositoryImpl.java:178-184`
 - フロント側のファイル形式チェックは `jpeg|jpg|png|webp` のみで、GIF を許可していない
-  - `/Users/432kg/IdeaProjects/footprint-front/src/utils/validationRules.js:37-42`
+  - `../footprint-front/src/utils/validationRules.js:37-42`
 
 #### 差分
 
@@ -261,7 +261,7 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - `POST /api/users` でユーザー作成後、`request.login(...)` によりログイン状態へ移行する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/UserRestController.java:172-194`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/UserRestController.java:172-194`
 
 #### 差分
 
@@ -283,9 +283,9 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - サインアップではユーザー名、メールアドレス、パスワード、生年月日を保持する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/request/SignUpRequest.java:24-61`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/request/SignUpRequest.java:24-61`
 - 投稿レスポンスには投稿者 username は含まれていない
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/response/PostItemResponse.java:15-46`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/response/PostItemResponse.java:15-46`
 
 #### 差分
 
@@ -305,8 +305,8 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - `GET /api/posts/search` は `keyword` を受け取り、`posts.caption LIKE CONCAT('%', keyword, '%')` で検索する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:103-129`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/jp/i432kg/footprint/infrastructure/datasource/mapper/query/PostQueryMapper.xml:151-203`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:103-129`
+  - `../footprint/src/main/resources/jp/i432kg/footprint/infrastructure/datasource/mapper/query/PostQueryMapper.xml:151-203`
 
 #### 差分
 
@@ -328,9 +328,9 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - `GET /api/posts/search/map` は `minLat`, `maxLat`, `minLng`, `maxLng` を受け取り bbox 内の投稿を返す
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:141-167`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:141-167`
 - SQL は `has_location = true` と緯度経度の `BETWEEN` で検索する
-  - `/Users/432kg/IdeaProjects/footprint/src/main/resources/jp/i432kg/footprint/infrastructure/datasource/mapper/query/PostQueryMapper.xml:205-226`
+  - `../footprint/src/main/resources/jp/i432kg/footprint/infrastructure/datasource/mapper/query/PostQueryMapper.xml:205-226`
 
 #### 差分
 
@@ -352,13 +352,13 @@ Lint を `ESLint` に更新する。
 #### 実装
 
 - 投稿配下のトップレベル返信は `GET /api/posts/{postId}/replies`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:203-221`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/PostRestController.java:203-221`
 - ネスト返信は `GET /api/replies/{parentReplyId}`
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/ReplyRestController.java:57-75`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/ReplyRestController.java:57-75`
 - 返信作成は `POST /api/replies/{postId}/reply` で、`parentReplyId` があればネスト返信になる
-  - `/Users/432kg/IdeaProjects/footprint/src/main/java/jp/i432kg/footprint/presentation/api/ReplyRestController.java:86-105`
+  - `../footprint/src/main/java/jp/i432kg/footprint/presentation/api/ReplyRestController.java:86-105`
 - フロントは `parentReplyId` ごとに子返信を取得・キャッシュする
-  - `/Users/432kg/IdeaProjects/footprint-front/src/stores/replyStore.js:5-17`
+  - `../footprint-front/src/stores/replyStore.js:5-17`
 
 #### 差分
 
