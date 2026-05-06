@@ -1,0 +1,682 @@
+openapi: 3.1.0
+info:
+  title: Footprint API
+  version: 0.1.0
+  description: |
+    Footprint バックエンドが提供する JSON API / multipart API の設計仕様。
+    
+    また、本ファイルはレビュー結果と設計意図を反映した最終使用版として扱う。
+    `docs/design/generated/openapi.yaml` は springdoc による自動生成版であり、
+    実装追随の確認や差分把握に使う下書きとして位置づける。
+
+servers:
+  - url: /
+    description: Same origin
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Posts
+  - name: Replies
+
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: Spring Security session cookie
+
+  parameters:
+    LastPostId:
+      name: lastId
+      in: query
+      required: false
+      description: 前ページ最後の投稿 ID。未指定時は先頭ページ。
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    LastReplyId:
+      name: lastId
+      in: query
+      required: false
+      description: 前ページ最後の返信 ID。未指定時は先頭ページ。
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    PageSize:
+      name: size
+      in: query
+      required: false
+      description: 取得件数。1 から 20 の範囲。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+    PostIdPath:
+      name: postId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+    ReplyIdPath:
+      name: parentReplyId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+
+  schemas:
+    ProblemDetailError:
+      type: object
+      description: |
+        実装は RFC 9457 の ProblemDetail を返し、`errorCode` と `details` を追加する。
+      properties:
+        type:
+          type: string
+          nullable: true
+        title:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        instance:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        details:
+          type: object
+          nullable: true
+          description: |
+            バリデーションエラーは `errors` 配下に配列を持つ。
+            それ以外のエラーは `target`, `reason`, `rejectedValue` を基本とする object を返す。
+          additionalProperties: true
+
+    LoginRequest:
+      type: object
+      required: [loginId, password]
+      properties:
+        loginId:
+          type: string
+          description: ログイン ID。実装上は email を想定する。
+        password:
+          type: string
+
+    SignUpRequest:
+      type: object
+      required: [userName, email, password, birthDate]
+      properties:
+        userName:
+          type: string
+          minLength: 4
+          maxLength: 15
+          pattern: "^[\\x21-\\x7E]+$"
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          pattern: "^[\\x21-\\x7E]+$"
+        birthDate:
+          type: string
+          format: date
+          description: 未来日は不可。過去日または当日を指定する。
+
+    PostCreateRequest:
+      type: object
+      description: |
+        投稿作成用 multipart リクエスト。
+        `imageFile` は 10MB 以下、JPEG / PNG / GIF / WEBP を受け付ける。
+      required: [imageFile]
+      properties:
+        imageFile:
+          type: string
+          format: binary
+        comment:
+          type: string
+          maxLength: 100
+          pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+          nullable: true
+
+    ReplyRequest:
+      type: object
+      required: [message]
+      properties:
+        parentReplyId:
+          type: string
+          pattern: "^[0-9A-HJKMNP-TV-Z]{26}$"
+          nullable: true
+        message:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+
+    ImageResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        sortOrder:
+          type: integer
+        url:
+          type: string
+        fileExtension:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+
+    LocationResponse:
+      type: object
+      properties:
+        lat:
+          type: number
+          format: double
+          nullable: true
+        lng:
+          type: number
+          format: double
+          nullable: true
+
+    PostItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImageResponse'
+        hasLocation:
+          type: boolean
+        location:
+          $ref: '#/components/schemas/LocationResponse'
+        createdAt:
+          type: string
+          format: date-time
+
+    ReplyItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        postId:
+          type: string
+        parentReplyId:
+          type: string
+          nullable: true
+        message:
+          type: string
+        childCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    UserProfileItemResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+        postCount:
+          type: integer
+        replyCount:
+          type: integer
+
+paths:
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: |
+        Spring Security のフォームログイン。
+        `application/x-www-form-urlencoded` で `loginId` と `password` を送る。
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Logged in
+        '401':
+          description: Authentication failed
+
+  /api/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      security:
+        - SessionCookie: []
+      responses:
+        '204':
+          description: Logged out
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/users:
+    post:
+      tags: [Users]
+      summary: Sign up
+      description: 登録成功後はそのままログイン状態へ移行する。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUpRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '409':
+          description: Email already used
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/users/me:
+    get:
+      tags: [Users]
+      summary: Get current user profile
+      security:
+        - SessionCookie: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfileItemResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/users/me/posts:
+    get:
+      tags: [Users]
+      summary: List my posts
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/users/me/replies:
+    get:
+      tags: [Users]
+      summary: List my replies
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/LastReplyId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/posts:
+    get:
+      tags: [Posts]
+      summary: List recent posts
+      description: |
+        無限スクロール用の一覧取得。
+        `lastId` は前ページ最後の投稿 ID を渡す。
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      tags: [Posts]
+      summary: Create post
+      description: |
+        画像付き投稿を作成する。
+        `imageFile` は 10MB 以下とし、JPEG / PNG / GIF / WEBP を受け付ける。
+      security:
+        - SessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PostCreateRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/posts/search:
+    get:
+      tags: [Posts]
+      summary: Search posts by keyword
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: keyword
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: "^(?!.*[\\x00-\\x09\\x0B\\x0C\\x0E-\\x1F\\x7F]).*$"
+        - $ref: '#/components/parameters/LastPostId'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/posts/search/map:
+    get:
+      tags: [Posts]
+      summary: Search posts by bounding box
+      description: |
+        指定した地理範囲内の投稿を検索する。
+        `minLat <= maxLat`、`minLng <= maxLng` を満たす必要がある。
+      security:
+        - SessionCookie: []
+      parameters:
+        - name: minLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90.0
+            maximum: 90.0
+        - name: maxLat
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -90.0
+            maximum: 90.0
+        - name: minLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180.0
+            maximum: 180.0
+        - name: maxLng
+          in: query
+          required: true
+          schema:
+            type: number
+            minimum: -180.0
+            maximum: 180.0
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/posts/{postId}:
+    get:
+      tags: [Posts]
+      summary: Get post detail
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/posts/{postId}/replies:
+    get:
+      tags: [Replies]
+      summary: List top-level replies of a post
+      description: |
+        投稿直下の返信を全件返す。
+        返信ツリー全体を再帰的に返す API ではなく、子返信は `GET /api/replies/{parentReplyId}` で
+        1 階層ずつ取得する。
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Post not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/replies/{parentReplyId}:
+    get:
+      tags: [Replies]
+      summary: List nested replies of a reply
+      description: |
+        指定した親返信の直下にある子返信を全件返す。
+        さらに深い階層は、展開対象の返信 ID を使って 1 階層ずつ取得する。
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ReplyIdPath'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReplyItemResponse'
+        '400':
+          description: Invalid parameter
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Reply not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+
+  /api/replies/{postId}/reply:
+    post:
+      tags: [Replies]
+      summary: Create reply
+      security:
+        - SessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/PostIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyRequest'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Validation failed or parent/post mismatch
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Post or parent reply not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetailError'
